@@ -306,6 +306,7 @@ public:
 
     void dump() const
     {
+        std::cout << "rows = " << rows << ", cols = " << cols <<"\n";
         for (int i = 0; i != rows; ++i)
         {
             dump_row(i);
