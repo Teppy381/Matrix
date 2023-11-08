@@ -3,38 +3,36 @@
 #include <cassert>
 #include <iostream>
 #include <cmath>
-// #include <iterator>
-// #include <list>
-// #include <unordered_map>
-// #include <vector>
+#include <type_traits>
 
 namespace matrices
 {
 
+template <typename num_t>
 class matrix_t
 {
-    unsigned cols, rows; // columns and rows count
-    double* storage;
-    double** rows_arr;
+    unsigned cols_, rows_; // columns and rows count
+    num_t* storage;
+    num_t** rows_arr;
 
     bool is_decomposed; // such decomposition of matrix A that P*A == L*U
-    matrix_t* P;
-    matrix_t* L;
-    matrix_t* U;
-    double determinant;
+    int pivoting_det;
+    matrix_t<double>* P;
+    matrix_t<double>* L;
+    matrix_t<double>* U;
 
     struct ProxyRow
     {
-        double* row;
+        num_t* row;
         unsigned row_n;
-        unsigned cols;
+        unsigned cols_;
         matrix_t* A;
 
-        const double& operator[](int col_n) const
+        const num_t& operator[](int col_n) const
         {
             // std::cout << "accessing [" << row_n << "][" << col_n << "]\n";
             // A->dump();
-            if (col_n >= cols)
+            if (col_n >= cols_)
             {
                 std::cout << "Cannot access [" << row_n << "][" << col_n << "] element of matrix\n";
                 A->dump();
@@ -42,11 +40,11 @@ class matrix_t
             }
             return row[col_n];
         }
-        double& operator[](int col_n)
+        num_t& operator[](int col_n)
         {
             // std::cout << "accessing [" << row_n << "][" << col_n << "]\n";
             // A->dump();
-            if (col_n >= cols)
+            if (col_n >= cols_)
             {
                 std::cout << "Cannot access [" << row_n << "][" << col_n << "] element of matrix\n";
                 A->dump();
@@ -60,17 +58,17 @@ public:
 
     matrix_t(unsigned rows_a, unsigned cols_a) // 2 arguments constructor
     {
-        cols = cols_a;
-        rows = rows_a;
+        cols_ = cols_a;
+        rows_ = rows_a;
 
-        storage = new double[cols_a * rows_a];
-        rows_arr = new double*[rows_a];
+        storage = new num_t[cols_a * rows_a];
+        rows_arr = new num_t*[rows_a];
 
         is_decomposed = false;
         P = nullptr;
         U = nullptr;
         L = nullptr;
-        determinant = NAN;
+        pivoting_det = 0;
 
         for (int i = 0; i != rows_a; ++i)
         {
@@ -86,17 +84,17 @@ public:
     matrix_t(const matrix_t& rhs) // copy constructor
     {
         // std::cout << "copy constructor\n";
-        cols = rhs.cols;
-        rows = rhs.rows;
+        cols_ = rhs.cols_;
+        rows_ = rhs.rows_;
 
-        storage = new double[rhs.cols * rhs.rows];
-        for (int i = 0, size = rhs.cols * rhs.rows; i != size; ++i)
+        storage = new num_t [rhs.cols_ * rhs.rows_];
+        for (int i = 0, size = rhs.cols_ * rhs.rows_; i != size; ++i)
         {
             storage[i] = rhs.storage[i];
         }
 
-        rows_arr = new double*[rhs.rows];
-        for (int i = 0; i != rhs.rows; ++i)
+        rows_arr = new num_t* [rhs.rows_];
+        for (int i = 0; i != rhs.rows_; ++i)
         {
             rows_arr[i] = storage + (rhs.rows_arr[i] - rhs.storage);
         }
@@ -104,43 +102,44 @@ public:
         P = nullptr;
         U = nullptr;
         L = nullptr;
-        determinant = NAN;
+        pivoting_det = 0;
 
         is_decomposed = rhs.is_decomposed;
         if (is_decomposed)
         {
             assert(rhs.P != nullptr && rhs.U != nullptr && rhs.L != nullptr);
-            P = new matrix_t{rhs.P->rows, rhs.P->cols};
-            U = new matrix_t{rhs.U->rows, rhs.U->cols};
-            L = new matrix_t{rhs.L->rows, rhs.L->cols};
+            P = new matrix_t{rhs.P->rows_, rhs.P->cols_};
+            U = new matrix_t{rhs.U->rows_, rhs.U->cols_};
+            L = new matrix_t{rhs.L->rows_, rhs.L->cols_};
             *P = *(rhs.P);
             *U = *(rhs.U);
             *L = *(rhs.L);
-            determinant = rhs.determinant;
+            pivoting_det = rhs.pivoting_det;
         }
     }
 
     matrix_t(matrix_t&& rhs) // move constructor
     {
         // std::cout << "move constructor\n";
-        cols = rhs.cols;
-        rows = rhs.rows;
+        cols_ = rhs.cols_;
+        rows_ = rhs.rows_;
         storage = rhs.storage;
         rows_arr = rhs.rows_arr;
         is_decomposed = rhs.is_decomposed;
         P = rhs.P;
         U = rhs.U;
         L = rhs.L;
-        determinant = rhs.determinant;
+        pivoting_det = rhs.pivoting_det;
 
-        rhs.rows = 0;
-        rhs.cols = 0;
+        rhs.rows_ = 0;
+        rhs.cols_ = 0;
         rhs.storage = nullptr;
         rhs.rows_arr = nullptr;
         rhs.is_decomposed = false;
         rhs.P = nullptr;
         rhs.U = nullptr;
         rhs.L = nullptr;
+        rhs.pivoting_det = 0;
     }
 
     ~matrix_t() // destructor
@@ -167,26 +166,28 @@ public:
         delete[] rows_arr;
         delete[] storage;
 
-        cols = rhs.cols;
-        rows = rhs.rows;
+        cols_ = rhs.cols_;
+        rows_ = rhs.rows_;
         storage = rhs.storage;
         rows_arr = rhs.rows_arr;
         is_decomposed = rhs.is_decomposed;
         P = rhs.P;
         U = rhs.U;
         L = rhs.L;
-        determinant = rhs.determinant;
+        pivoting_det = rhs.pivoting_det;
 
-        rhs.rows = 0;
-        rhs.cols = 0;
+        rhs.rows_ = 0;
+        rhs.cols_ = 0;
         rhs.storage = nullptr;
         rhs.rows_arr = nullptr;
         rhs.is_decomposed = false;
         rhs.P = nullptr;
         rhs.U = nullptr;
         rhs.L = nullptr;
+        rhs.pivoting_det = 0;
         return *this;
     }
+
 
     matrix_t& operator=(const matrix_t& rhs) // copy assign
     {
@@ -195,54 +196,38 @@ public:
         {
             return *this;
         }
-        if (cols != rhs.cols ||  rows != rhs.rows)
-        {
-            cols = rhs.cols;
-            rows = rhs.rows;
+        matrix_t tmp(rhs);
 
-            delete[] rows_arr;
-            delete[] storage;
-            storage = new double[rhs.cols * rhs.rows];
-            rows_arr = new double*[rhs.rows];
-        }
+        rows_ = tmp.rows_;
+        cols_ = tmp.cols_;
+        storage = tmp.storage;
+        rows_arr = tmp.rows_arr;
+        is_decomposed = tmp.is_decomposed;
+        P = tmp.P;
+        L = tmp.L;
+        U = tmp.U;
+        pivoting_det = tmp.pivoting_det;
 
-        for (int i = 0; i != rhs.rows; ++i)
-        {
-            rows_arr[i] = storage + (rhs.rows_arr[i] - rhs.storage);
-        }
-
-        for (int i = 0, size = rhs.cols * rhs.rows; i != size; ++i)
-        {
-            storage[i] = rhs.storage[i];
-        }
-
-        delete P;
-        delete U;
-        delete L;
-        P = nullptr;
-        U = nullptr;
-        L = nullptr;
-        determinant = NAN;
-
-        is_decomposed = rhs.is_decomposed;
-        if (is_decomposed)
-        {
-            assert(rhs.P != nullptr && rhs.U != nullptr && rhs.L != nullptr);
-            P = new matrix_t{rhs.P->rows, rhs.P->cols};
-            U = new matrix_t{rhs.U->rows, rhs.U->cols};
-            L = new matrix_t{rhs.L->rows, rhs.L->cols};
-            *P = *(rhs.P);
-            *U = *(rhs.U);
-            *L = *(rhs.L);
-            determinant = rhs.determinant;
-        }
         return *this;
     }
 
+    template <typename new_num_t>
+    matrix_t<new_num_t> copy() // copy into different type of matrix
+    {
+        matrix_t<new_num_t> new_matrix{rows_, cols_};
+        for (int i = 0; i != rows_; ++i)
+        {
+            for (int j = 0; j != cols_; ++j)
+            {
+                new_matrix[i][j] = static_cast<new_num_t>((*this)[i][j]);
+            }
+        }
+        return new_matrix;
+    }
 
     ProxyRow operator[](unsigned row_n)
     {
-        if (row_n >= rows)
+        if (row_n >= rows_)
         {
             std::cout << "Cannot access [" << row_n << "] row of matrix:\nHere is the dump:\n";
             dump();
@@ -250,17 +235,27 @@ public:
         }
 
         ProxyRow row;
-        row.cols = cols;
+        row.cols_ = cols_;
         row.row_n = row_n;
         row.row = rows_arr[row_n];
         row.A = this;
         return row;
     }
 
+    // getters
+    unsigned cols()
+    {
+        return cols_;
+    }
+    unsigned rows()
+    {
+        return rows_;
+    }
+
 
     void swap_rows(unsigned row_first, unsigned row_second)
     {
-        if (row_first >= rows || row_second >= rows)
+        if (row_first >= rows_ || row_second >= rows_)
         {
             std::cout << "Cannot access [" << row_first << "] or [" << row_second << "] row of matrix\n";
             exit(1);
@@ -268,14 +263,14 @@ public:
 
         if (row_first == row_second)
         { return; }
-        double* temp = rows_arr[row_first];
+        num_t* temp = rows_arr[row_first];
         rows_arr[row_first] = rows_arr[row_second];
         rows_arr[row_second] = temp;
     }
 
     void clear()
     {
-        for (unsigned i = 0, size = cols * rows; i != size; ++i)
+        for (unsigned i = 0, size = cols_ * rows_; i != size; ++i)
         {
             storage[i] = 0;
         }
@@ -283,13 +278,13 @@ public:
 
     void make_identity()
     {
-        if (rows != cols)
+        if (rows_ != cols_)
         {
             std::cout << "Cannot make identity matrix from a non-quadratic matrix\n";
             exit(1);
         }
         clear();
-        for (unsigned i = 0; i < cols; ++i)
+        for (unsigned i = 0; i < cols_; ++i)
         {
             (*this)[i][i] = 1;
         }
@@ -297,7 +292,7 @@ public:
 
     void dump_row(unsigned row) const
     {
-        for (int i = 0; i != cols; ++i)
+        for (int i = 0; i != cols_; ++i)
         {
             std::cout << *(rows_arr[row] + i) << " ";
         }
@@ -306,8 +301,8 @@ public:
 
     void dump() const
     {
-        std::cout << "rows = " << rows << ", cols = " << cols <<"\n";
-        for (int i = 0; i != rows; ++i)
+        std::cout << "rows = " << rows_ << ", cols = " << cols_ <<"\n";
+        for (int i = 0; i != rows_; ++i)
         {
             dump_row(i);
         }
@@ -331,9 +326,9 @@ public:
 
     void scan_from_stdin()
     {
-        for (unsigned i = 0; i < rows; ++i)
+        for (unsigned i = 0; i < rows_; ++i)
         {
-            for (unsigned j = 0; j < cols; ++j)
+            for (unsigned j = 0; j < cols_; ++j)
             {
                 std::cin >> (*this)[i][j];
                 if (!std::cin.good())
@@ -355,33 +350,33 @@ public:
 
     void decompose()
     {
-        if (rows != cols)
+        if (rows_ != cols_)
         {
             std::cout << "Cannot make LUP decomposition for a non-quadratic matrix\n";
             exit(1);
         }
-        U = new matrix_t{rows};
-        *U = *this;
+        delete U;
+        delete L;
+        delete P;
 
-        L = new matrix_t{rows};
+        U = new matrix_t<double>{rows_};
+        *U = this->copy<double>();
+
+        L = new matrix_t<double>{rows_};
         L->make_identity();
 
-        P = new matrix_t{rows};
+        P = new matrix_t<double>{rows_};
         P->make_identity();
-        P->determinant = 1;
-
+        pivoting_det = 1;
 
         unsigned h = 0; // pivot row
         unsigned k = 0; // pivot column
-        while (h < rows && k < cols)
+        while (h < rows_ && k < cols_)
         {
             /* Find the k-th pivot: */
-            // std::cout << "\e[35m";
-            // std::cout << "h = " << h << "\nk = " << k << "\nrows = " << rows << "\ncols = " << cols << "\n";
-
             unsigned i_max = 0;
             double max = 0;
-            for (unsigned i = h; i < rows; ++i)
+            for (unsigned i = h; i < rows_; ++i)
             {
                 double value = std::abs((*U)[i][k]);
                 if(value > max)
@@ -390,78 +385,71 @@ public:
                     i_max = i;
                 }
             }
-            // std::cout << "\e[0m";
+
             if (is_zero(max))
             {
                 /* No pivot in this column, pass to next column */
                 k += 1;
+                continue;
             }
-            else
-            {
-                U->swap_rows(h, i_max);
-                P->swap_rows(h, i_max);
-                if (h != i_max)
-                {
-                    P->determinant *= -1;
-                }
-                /* Do for all rows below pivot: */
-                for (unsigned i = h + 1; i < rows; ++i)
-                {
-                    // std::cout << "\e[31m"; // RED
-                    double f = (*U)[i][k] / (*U)[h][k];
 
-                    // std::cout << "f = " << f << "\n";
-                    /* Fill with zeros the L part of pivot column: */
-                    // std::cout << "\e[32m"; // GREEN
-                    (*U)[i][k] = 0;
-                    /* Do for all remaining elements in current row: */
-                    // std::cout << "\e[34m"; // BLUE
-                    for (unsigned j = k + 1; j < cols; ++j)
-                    {
-                        (*U)[i][j] -= (*U)[h][j] * f;
-                    }
-                    (*L)[i][h] = f;
-                    // std::cout << "\e[0m";
-                }
-                /* Increase pivot row and column */
-                h += 1;
-                k += 1;
+            U->swap_rows(h, i_max);
+            P->swap_rows(h, i_max);
+            if (h != i_max)
+            {
+                pivoting_det = -pivoting_det;
             }
+            /* Do for all rows below pivot: */
+            for (unsigned i = h + 1; i < rows_; ++i)
+            {
+                double f = (*U)[i][k] / (*U)[h][k];
+
+                /* Fill with zeros the L part of pivot column: */
+                (*U)[i][k] = 0;
+
+                /* Do for all remaining elements in current row: */
+                for (unsigned j = k + 1; j < cols_; ++j)
+                {
+                    (*U)[i][j] -= (*U)[h][j] * f;
+                }
+                (*L)[i][h] = f;
+            }
+            /* Increase pivot row and column */
+            h += 1;
+            k += 1;
         }
         is_decomposed = true;
         return;
     }
 
-    double calc_determinant()
+    num_t calc_determinant()
     {
-        if (determinant == determinant) // determinant != NAN
-        {
-            return determinant;
-        }
-
         if (!is_decomposed)
         {
             decompose();
         }
         assert(P != nullptr && U != nullptr && L != nullptr);
-        assert(cols == rows);
+        assert(cols_ == rows_);
 
-        double det = P->determinant;
+        double det = pivoting_det;
 
-        assert(U->cols == U->rows);
-        for (unsigned i = 0; i < U->cols; ++i)
+        assert(U->cols() == U->rows());
+        for (unsigned i = 0; i < U->cols(); ++i)
         {
             det *= (*U)[i][i];
         }
+
+        if (std::is_integral_v<num_t>)
+        {
+            det = round(det);
+        }
+
         if (det == 0) // to get rid of -0
         {
-            determinant = 0;
             return 0;
         }
-        determinant = det;
-        return det;
+        return (num_t) det;
     }
-
 
 
 }; // end of matrix_t

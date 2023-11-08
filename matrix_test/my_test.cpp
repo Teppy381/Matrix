@@ -12,7 +12,7 @@ TEST(Matrix, ClearCheck)
 
     unsigned rows = size_distribution(gen);
     unsigned cols = size_distribution(gen);
-    matrices::matrix_t M{rows, cols};
+    matrices::matrix_t<double> M{rows, cols};
 
     M.clear();
 
@@ -25,7 +25,7 @@ TEST(Matrix, ClearCheck)
     }
 }
 
-TEST(Matrix, DeterminantCheck)
+TEST(Matrix, DoubleDeterminantCheck)
 {
     unsigned tests_amount = 10;
 
@@ -38,7 +38,7 @@ TEST(Matrix, DeterminantCheck)
     for (int t = 0; t != tests_amount; ++t)
     {
         unsigned size = size_distribution(gen);
-        matrices::matrix_t M{size};
+        matrices::matrix_t<double> M{size};
 
         double det = 1.0;
         for (int i = 0; i != size; ++i)
@@ -71,5 +71,54 @@ TEST(Matrix, DeterminantCheck)
         }
 
         EXPECT_NEAR(1, det / M.calc_determinant(), 0.0000000000001);
+    }
+}
+
+TEST(Matrix, IntegerDeterminantCheck)
+{
+    unsigned tests_amount = 10;
+
+    std::random_device rd;
+    std::mt19937 gen(rd());
+
+    std::uniform_real_distribution<double> distribution(-5.0, 5.0);
+    std::uniform_real_distribution<double> size_distribution(2.0, 10.0);
+
+    for (int t = 0; t != tests_amount; ++t)
+    {
+        unsigned size = size_distribution(gen);
+        matrices::matrix_t<int> M{size};
+
+        double det = 1.0;
+        for (int i = 0; i != size; ++i)
+        {
+            for (int j = 0; j != size; ++j)
+            {
+                if (i == j)
+                {
+                    M[i][j] = (int) distribution(gen);
+                    det *= M[i][j];
+                }
+            }
+        }
+
+        for (int i = 1; i != size; ++i)
+        {
+            for (int j = 0; j != size; ++j)
+            {
+                M[i][j] += M[i - 1][j];
+            }
+        }
+
+        for (int i = 1; i < size/2; ++i)
+        {
+            int num = (int) distribution(gen);
+            for (int j = 0; j != size; ++j)
+            {
+                M[i][j] += M[size - i][j] * num;
+            }
+        }
+
+        EXPECT_EQ((int) det, M.calc_determinant());
     }
 }
