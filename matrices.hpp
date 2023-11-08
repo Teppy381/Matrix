@@ -198,15 +198,15 @@ public:
         }
         matrix_t tmp(rhs);
 
-        rows_ = tmp.rows_;
-        cols_ = tmp.cols_;
-        storage = tmp.storage;
-        rows_arr = tmp.rows_arr;
-        is_decomposed = tmp.is_decomposed;
-        P = tmp.P;
-        L = tmp.L;
-        U = tmp.U;
-        pivoting_det = tmp.pivoting_det;
+        std::swap(rows_, tmp.rows_);
+        std::swap(cols_, tmp.cols_);
+        std::swap(storage, tmp.storage);
+        std::swap(rows_arr, tmp.rows_arr);
+        std::swap(is_decomposed, tmp.is_decomposed);
+        std::swap(P, tmp.P);
+        std::swap(L, tmp.L);
+        std::swap(U, tmp.U);
+        std::swap(pivoting_det, tmp.pivoting_det);
 
         return *this;
     }
@@ -352,7 +352,7 @@ public:
     {
         if (rows_ != cols_)
         {
-            std::cout << "Cannot make LUP decomposition for a non-quadratic matrix\n";
+            std::cout << "Cannot make LUP decomposition for a non-square matrix\n";
             exit(1);
         }
         delete U;
