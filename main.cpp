@@ -8,12 +8,12 @@
 
 int main()
 {
-    unsigned x;
+    unsigned x, y;
 
     std::cout << "Enter matrix size: ";
-    std::cin >> x;
+    std::cin >> x >> y;
 
-    matrices::matrix_t<double> A = matrices::matrix_t<double>{x};
+    matrices::matrix_t<double> A = matrices::matrix_t<double>{x, y};
 
     std::cout << "Enter matrix elements:\n";
     A.scan_from_stdin();
@@ -25,10 +25,13 @@ int main()
     // std::cout << "Your <int> matrix is:\n";
     // B.dump();
 
-    SHOW(A.calc_determinant());
-    SHOW(B.calc_determinant());
+    // SHOW(B.calc_determinant());
+    // SHOW(A.calc_determinant());
 
-    // A.dump_decomposition();
+    matrices::decomposed_matrix A_dec = A.decompose();
+
+    SHOW(A_dec.determinant);
+    SHOW(A.calc_determinant());
 
     return 0;
 }
