@@ -220,3 +220,45 @@ TEST(DecomposedMatrix, IntegerDeterminantCheck)
         EXPECT_EQ((int) det, decomp.determinant);
     }
 }
+
+TEST(Matrix, PrecalculatedDeterminantCheck)
+{
+    matrices::matrix_t<int> M{2};
+    M.scan("0 0 "
+           "0 0 ");
+    EXPECT_EQ(M.calc_determinant(), 0);
+
+    M.scan("1 0 "
+           "0 1 ");
+    EXPECT_EQ(M.calc_determinant(), 1);
+
+    M.scan("1 2 "
+           "3 4 ");
+    EXPECT_EQ(M.calc_determinant(), -2);
+
+    M.scan("5463 9872 "
+          "-1435 4032 ");
+    EXPECT_EQ(M.calc_determinant(), 36193136);
+
+    matrices::matrix_t<int> A{4};
+    A.scan("0 0 0 1 "
+           "0 1 0 0 "
+           "1 0 0 0 "
+           "0 0 1 0 ");
+    EXPECT_EQ(A.calc_determinant(), 1);
+
+    A.scan("0 1 0 1 "
+           "0 1 0 1 "
+           "9 9 9 9 "
+           "3 4 1 0 ");
+    EXPECT_EQ(A.calc_determinant(), 0);
+
+    matrices::matrix_t<double> B{2};
+    B.scan("0.001   1  "
+           "  1   1000 ");
+    EXPECT_NEAR(0, B.calc_determinant(), 0.0000000000001);
+
+    B.scan("15.99999 4 "
+           "   4     1 ");
+    EXPECT_NEAR(-0.00001, B.calc_determinant(), 0.0000000000001);
+}

@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cmath>
 #include <type_traits>
+#include <sstream>
 
 namespace matrices
 {
@@ -267,7 +268,7 @@ public:
         std::cout << "\n";
     }
 
-    void scan_from_stdin()
+    void scan()
     {
         for (unsigned i = 0; i < rows_; ++i)
         {
@@ -278,6 +279,17 @@ public:
                 { return; }
             }
         }
+    }
+
+    void scan(const char* str)
+    {
+        std::streambuf* orig_stream = std::cin.rdbuf();
+        std::istringstream input(str);
+        std::cin.rdbuf(input.rdbuf());
+
+        scan();
+
+        std::cin.rdbuf(orig_stream);
     }
 
 
