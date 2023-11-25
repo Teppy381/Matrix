@@ -5,6 +5,7 @@
 #include <cmath>
 #include <type_traits>
 #include <sstream>
+#include <exception>
 
 namespace matrices
 {
@@ -19,6 +20,12 @@ bool is_zero(double x)
 }
 
 template <typename num_t>
+struct matrix_out_of_range;
+
+template <typename num_t>
+struct matrix_square_required;
+
+template <typename num_t>
 struct decomposed_matrix;
 
 template <typename num_t>
@@ -30,31 +37,28 @@ class matrix_t
 
     struct ProxyRow
     {
-        ProxyRow(num_t* row, const unsigned row_n, const unsigned cols, const matrix_t* A):
-            row_{row}, row_n_{row_n}, cols_{cols}, A_{A}
-        {}
         num_t* row_;
         const unsigned row_n_;
         const unsigned cols_;
-        const matrix_t* A_;
+        const matrix_t& A_;
 
-        const num_t& operator[](int col_n) const
+        ProxyRow(num_t* row, const unsigned row_n, const unsigned cols, const matrix_t& A) :
+            row_{row}, row_n_{row_n}, cols_{cols}, A_{A}
+        {} // constructor
+
+        const num_t& operator[](unsigned col_n) const
         {
             if (col_n >= cols_)
             {
-                std::cout << "Cannot access [" << row_n_ << "][" << col_n << "] element of matrix\n";
-                A_->dump();
-                exit(1);
+                throw matrix_out_of_range<num_t>{A_, row_n_, col_n, "In matrix cannot access element"};
             }
             return row_[col_n];
         }
-        num_t& operator[](int col_n)
+        num_t& operator[](unsigned col_n)
         {
             if (col_n >= cols_)
             {
-                std::cout << "Cannot access [" << row_n_ << "][" << col_n << "] element of matrix\n";
-                A_->dump();
-                exit(1);
+                throw matrix_out_of_range<num_t>{A_, row_n_, col_n, "In matrix cannot access element"};
             }
             return row_[col_n];
         }
@@ -81,39 +85,6 @@ public:
     matrix_t(unsigned size) : matrix_t(size, size) // 1 argument constructor
     {}
 
-    matrix_t(const matrix_t& rhs) // copy constructor
-    {
-        // std::cout << "copy constructor\n";
-        cols_ = rhs.cols_;
-        rows_ = rhs.rows_;
-
-        storage = new num_t [rhs.cols_ * rhs.rows_];
-        for (int i = 0, size = rhs.cols_ * rhs.rows_; i != size; ++i)
-        {
-            storage[i] = rhs.storage[i];
-        }
-
-        rows_arr = new num_t* [rhs.rows_];
-        for (int i = 0; i != rhs.rows_; ++i)
-        {
-            rows_arr[i] = storage + (rhs.rows_arr[i] - rhs.storage);
-        }
-    }
-
-    matrix_t(matrix_t&& rhs) // move constructor
-    {
-        // std::cout << "move constructor\n";
-        cols_ = rhs.cols_;
-        rows_ = rhs.rows_;
-        storage = rhs.storage;
-        rows_arr = rhs.rows_arr;
-
-        rhs.rows_ = 0;
-        rhs.cols_ = 0;
-        rhs.storage = nullptr;
-        rhs.rows_arr = nullptr;
-    }
-
     ~matrix_t() // destructor
     {
         // std::cout << "destructor\n";
@@ -121,26 +92,43 @@ public:
         delete[] storage;
     }
 
-    matrix_t& operator=(matrix_t&& rhs) // move assign
+    void swap(matrix_t& rhs) noexcept
+    {
+        std::swap(cols_, rhs.cols_);
+        std::swap(rows_, rhs.rows_);
+        std::swap(storage, rhs.storage);
+        std::swap(rows_arr, rhs.rows_arr);
+    }
+
+    matrix_t(const matrix_t& rhs) // copy constructor
+    {
+        // std::cout << "copy constructor\n";
+        matrix_t<num_t> tmp{rhs.rows_, rhs.cols_};
+        for (int i = 0; i != tmp.rows_; ++i)
+        {
+            for (int j = 0; j != tmp.cols_; ++j)
+            {
+                tmp[i][j] = rhs[i][j];
+            }
+        }
+        swap(tmp);
+        tmp.rows_arr = NULL;
+        tmp.storage = NULL;
+    }
+
+    matrix_t(matrix_t&& rhs) noexcept // move constructor
+    {
+        // std::cout << "move constructor\n";
+        swap(rhs);
+    }
+
+    matrix_t& operator=(matrix_t&& rhs) noexcept // move assign
     {
         // std::cout << "move assign\n";
-        if (this == &rhs)
+        if (this != &rhs)
         {
-            return *this;
+            swap(rhs);
         }
-
-        delete[] rows_arr;
-        delete[] storage;
-
-        cols_ = rhs.cols_;
-        rows_ = rhs.rows_;
-        storage = rhs.storage;
-        rows_arr = rhs.rows_arr;
-
-        rhs.rows_ = 0;
-        rhs.cols_ = 0;
-        rhs.storage = nullptr;
-        rhs.rows_arr = nullptr;
         return *this;
     }
 
@@ -154,11 +142,7 @@ public:
         }
         matrix_t tmp(rhs);
 
-        std::swap(rows_, tmp.rows_);
-        std::swap(cols_, tmp.cols_);
-        std::swap(storage, tmp.storage);
-        std::swap(rows_arr, tmp.rows_arr);
-
+        swap(tmp);
         return *this;
     }
 
@@ -180,11 +164,9 @@ public:
     {
         if (row_n >= rows_)
         {
-            std::cout << "Cannot access [" << row_n << "] row of matrix:\nHere is the dump:\n";
-            dump();
-            exit(1);
+            throw matrix_out_of_range<num_t>{*this, row_n, 0, "In matrix cannot access row"};
         }
-        ProxyRow row{rows_arr[row_n], row_n, cols_, this};
+        ProxyRow row{rows_arr[row_n], row_n, cols_, *this};
         return row;
     }
 
@@ -192,12 +174,10 @@ public:
     {
         if (row_n >= rows_)
         {
-            std::cout << "Cannot access [" << row_n << "] row of matrix:\nHere is the dump:\n";
-            dump();
-            exit(1);
+            throw matrix_out_of_range<num_t>{*this, row_n, 0, "In matrix cannot access row"};
         }
 
-        const ProxyRow row{rows_arr[row_n], row_n, cols_, this};
+        const ProxyRow row{rows_arr[row_n], row_n, cols_, *this};
         return row;
     }
 
@@ -214,17 +194,9 @@ public:
 
     void swap_rows(unsigned row_first, unsigned row_second)
     {
-        if (row_first >= rows_ || row_second >= rows_)
-        {
-            std::cout << "Cannot access [" << row_first << "] or [" << row_second << "] row of matrix\n";
-            exit(1);
-        }
-
         if (row_first == row_second)
         { return; }
-        num_t* temp = rows_arr[row_first];
-        rows_arr[row_first] = rows_arr[row_second];
-        rows_arr[row_second] = temp;
+        std::swap(rows_arr[row_first], rows_arr[row_second]);
     }
 
     void clear()
@@ -239,8 +211,7 @@ public:
     {
         if (rows_ != cols_)
         {
-            std::cout << "Cannot make identity matrix from a non-quadratic matrix\n";
-            exit(1);
+            throw matrix_square_required(*this, "Cannot make identity matrix from a non-square matrix");
         }
         clear();
         for (unsigned i = 0; i < cols_; ++i)
@@ -299,8 +270,7 @@ public:
     {
         if (rows_ != cols_)
         {
-            std::cout << "Cannot calculate determinant for a non-square matrix\n";
-            exit(1);
+            throw matrix_square_required(*this, "Cannot calculate determinant for a non-square matrix");
         }
 
         matrix_t<double> U = this->copy<double>();
@@ -468,7 +438,7 @@ struct decomposed_matrix // such decomposition of matrix M that P*M == L*U
 
     void dump() const
     {
-        std::cout << "\nM";
+        std::cout << "M";
         M.dump();
         std::cout << "P";
         P.dump();
@@ -477,18 +447,45 @@ struct decomposed_matrix // such decomposition of matrix M that P*M == L*U
         std::cout << "L";
         L.dump();
     }
-};
+}; // end of decomposed_matrix
 
 template <typename num_t>
 decomposed_matrix<num_t> matrix_t<num_t>::decompose() const
 {
     if (rows_ != cols_)
     {
-        std::cout << "Cannot make LUP decomposition for a non-square matrix\n";
-        exit(1);
+        throw matrix_square_required(*this, "Cannot make LUP decomposition for a non-square matrix");
     }
     decomposed_matrix decomp{*this};
     return decomp;
 }
+
+template <typename num_t>
+void swap(matrix_t<num_t>& A, matrix_t<num_t>& B) noexcept
+{
+    A.swap(B);
+}
+
+template <typename num_t>
+struct matrix_out_of_range : public std::out_of_range
+{
+    const matrix_t<num_t> matrix;
+    unsigned row;
+    unsigned col;
+
+    matrix_out_of_range(matrix_t<num_t> matrix_arg, unsigned row_n, unsigned col_n, const char* what_arg)
+    : matrix{matrix_arg}, row{row_n}, col{col_n}, std::out_of_range{what_arg}
+    {}
+};
+
+template <typename num_t>
+struct matrix_square_required : public std::runtime_error
+{
+    const matrix_t<num_t> matrix;
+
+    matrix_square_required(matrix_t<num_t> matrix_arg, const char* what_arg)
+    : matrix{matrix_arg}, std::runtime_error{what_arg}
+    {}
+};
 
 } // end of namespace matrices
