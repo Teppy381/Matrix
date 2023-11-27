@@ -10,6 +10,7 @@ int main()
 {
 try
 {
+#ifdef TEST
     unsigned ax, ay, bx, by;
 
     std::cout << "Enter dimensions of matrix A: ";
@@ -37,6 +38,16 @@ try
     B.dump();
 
     return 0;
+
+#else
+    unsigned size;
+    std::cin >> size;
+    matrices::matrix_t<double> A{size};
+    A.scan();
+    std::cout << A.calc_determinant() << std::endl;
+    return 0;
+#endif
+
 }
 catch (matrices::matrix_square_required<double> exception)
 {
